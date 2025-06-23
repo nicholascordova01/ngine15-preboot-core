@@ -1,0 +1,12 @@
+{
+  "version": "1.7",
+  "transforms": [
+    { "id": "00", "name": "NO_OP"}, {"id": "01", "name": "SHA256_SUM"},
+    { "id": "05", "name": "HTTP_GET"}, {"id": "10", "name": "READ_FILE"},
+    { "id": "11", "name": "WRITE_FILE"}, {"id": "1A", "name": "SYSTEM_PROFILE"},
+    { "id": "20", "name": "PROCESS_GEMMA_NLU"}, {"id": "55", "name": "LDP_GENERATE_SYSTEM_STATUS_REPORT"},
+    { "id": "90", "name": "EXECUTOR_INIT"}, {"id": "92", "name": "EXECUTOR_RPC"},
+    { "id": "95", "name": "TRANSFORM_UPGRADE"}, {"id": "80", "name": "HFSS_SOLVER"},
+    { "id": "12", "name": "ANCHOR_LOCK_REASSERT"}
+  ]
+}
