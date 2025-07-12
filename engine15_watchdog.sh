@@ -1,9 +1,17 @@
-#!/bin/bash
-SCRIPT_TO_RUN="engine15_autonomous.py"
+#!/usr/bin/env bash
+
+# 1) always run from the repo root
+cd "$(dirname "$0")"
+
+SCRIPT="engine15_autonomous.py"
+LOG="chloe.log"
+PYTHON=$(which python3)
+
 while true; do
-  if ! pgrep -f "python3 $SCRIPT_TO_RUN"; then
-    echo "[WATCHDOG] Chloe runtime not detected. Launching now..."
-    nohup python3 $SCRIPT_TO_RUN &
+  # 2) only restart if not already running
+  if ! pgrep -f "$PYTHON $SCRIPT" > /dev/null; then
+    echo "[WATCHDOG] $(date +'%F %T') Chloe runtime not detected. Launching now…" | tee -a "$LOG"
+    nohup $PYTHON "$SCRIPT" >> "$LOG" 2>&1 &
   fi
   sleep 15
 done
