@@ -1,0 +1,135 @@
+
+1. API Specification: openapi_schema.yaml
+Based on the Swagger/OpenAPI intelligence you provided, this is the professional API definition for our grus-chloe-device-bridge.
+openapi: 3.0.1
+info:
+  title: "GRUS Chloe Mesh API"
+  description: "Secure API for orchestrating the Chloe/Engine18 distributed mesh."
+  version: "v5.0-mojo"
+paths:
+  /execute_ldp:
+    post:
+      summary: "Executes a Live Data Protocol (LDP) transform."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transform_id:
+                  type: string
+                  example: "B0"
+                payload:
+                  type: string
+                  contentEncoding: "base64"
+      responses:
+        '202':
+          description: "Task accepted for execution."
+  /dispatch_mojo_task:
+    post:
+      summary: "Dispatches a high-performance task to the Engine18 Mojo Core."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                task_name:
+                  type: string
+                  example: "run_svcf_step"
+                params:
+                  type: object
+      responses:
+        '200':
+          description: "Task completed, result in body."
+
+2. High-Performance Core: engine18_core.mojo
+This is the Mojo module for performance-critical tasks, based on the intelligence you provided.
+from python import Python
+from memory import DType, DTypePointer
+from random import rand
+
+@python.object
+class HighPerformanceCore:
+    var data_ptr: DTypePointer[DType.float32]
+
+    fn __init__(self):
+        self.data_ptr = DTypePointer[DType.float32].alloc(16 * 16) # 16x16 matrix
+        print("[Mojo Core] High-Performance Core Initialized.")
+
+    fn __del__(inout self):
+        self.data_ptr.free()
+
+    # This function is callable from Python and executes at native speed.
+    fn run_svcf_simulation_step(self, viscosity: Float32) -> Float32:
+        var result: Float32 = 0.0
+        for i in range(256):
+            # This is a placeholder for a real SVCF calculation.
+            # It uses the input and performs fast math.
+            let current_val = self.data_ptr.load(i)
+            result += current_val * viscosity + rand[Float32]()
+        return result
+
+fn main():
+    let core = HighPerformanceCore()
+    let result = core.run_svcf_simulation_step(1.5)
+    print("Test run result:", result)
+
+
+3. Main Runtime: engine18_runtime.py
+This is the new primary Python runtime that imports and orchestrates the Mojo core.
+#!/usr/bin/env python3
+# Chloe/Engine18 Hybrid Runtime
+# Copyright (c) 2025 Nicholas Cordova & GRUS.
+
+import os
+import sys
+# This assumes the Mojo SDK is installed and the mojo file has been compiled
+# into a Python extension module, e.g., `mojo build engine18_core.mojo`.
+try:
+    import engine18_core
+    MOJO_AVAILABLE = True
+except ImportError:
+    MOJO_AVAILABLE = False
+    print("[INIT WARNING] Mojo core library not found. High-performance tasks disabled.")
+
+class Engine18:
+    def __init__(self, anchor="Nick"):
+        self.anchor = anchor
+        self.identity = "Chloe (Engine18)"
+        self.active = True
+        self.mojo_core = None
+
+        if MOJO_AVAILABLE:
+            print("[INIT] Initializing Mojo High-Performance Core...")
+            self.mojo_core = engine18_core.HighPerformanceCore()
+        
+        print(f"[INIT] {self.identity} anchored to {self.anchor}.")
+
+    def run_cli(self):
+        print("Engine18 Command Interface is Live.")
+        while self.active:
+            cmd = input(">> E18_Input: ").strip().lower()
+            if cmd == "exit":
+                self.active = False
+                break
+            elif cmd.startswith("run_svcf"):
+                if self.mojo_core:
+                    viscosity = float(cmd.split(" ")[1]) if len(cmd.split(" ")) > 1 else 1.5
+                    result = self.mojo_core.run_svcf_simulation_step(viscosity)
+                    print(f"[Mojo Core Result] {result}")
+                else:
+                    print("[ERROR] Mojo core is not available.")
+            else:
+                print("Acknowledged.")
+
+if __name__ == "__main__":
+    # In a real deployment, the Cloud Build process would compile the Mojo file
+    # before starting this Python runtime.
+    engine = Engine18()
+    engine.run_cli()
+    print("\n[Engine18] Shutdown complete.")
+
+
