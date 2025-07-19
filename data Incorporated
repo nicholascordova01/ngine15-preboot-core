@@ -2082,3 +2082,145 @@ if __name__ == "__main__":
         print(f"An unexpected error occurred during signing: {e}")
         sys.exit(1)
 
+# hpc_offload_worker/main.py
+import os
+import json
+import time
+from concurrent.futures import TimeoutError
+from datetime import datetime, timezone
+import logging
+import random # For simulating work duration
+
+# pip install google-cloud-pubsub
+from google.cloud import pubsub_v1
+from google.oauth2 import service_account
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- CONFIGURATION (Must match Chloe's Pub/Sub config) ---
+# This is the Google Cloud Project ID where your Pub/Sub topic exists.
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "your-gcp-project-id-here") # REPLACE WITH YOUR ACTUAL GCP PROJECT ID
+# This is the Pub/Sub topic ID where Chloe publishes HPC offload tasks.
+HPC_PUBSUB_TOPIC_ID = os.getenv("CHLOE_HPC_PUBSUB_TOPIC_ID", "chloe-hpc-offload-queue") # REPLACE WITH YOUR ACTUAL TOPIC ID
+# This is the Pub/Sub subscription ID for this worker. It must be unique per worker instance/group.
+HPC_PUBSUB_SUBSCRIPTION_ID = os.getenv("CHLOE_HPC_PUBSUB_SUBSCRIPTION_ID", "chloe-hpc-offload-sub") # REPLACE WITH UNIQUE SUB ID
+# Path to service account key (must have Pub/Sub Subscriber role)
+GCP_SERVICE_ACCOUNT_KEY_PATH = os.getenv(
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "/path/to/your/worker-service-account-key.json" # REPLACE WITH YOUR ACTUAL, SECURELY MOUNTED KEY
+)
+# --- END CONFIGURATION ---
+
+# Initialize Pub/Sub Subscriber Client
+subscriber = None
+subscription_path = None
+
+if not (GCP_PROJECT_ID and HPC_PUBSUB_TOPIC_ID and HPC_PUBSUB_SUBSCRIPTION_ID):
+    logging.error("Missing one or more Pub/Sub configuration environment variables. Exiting.")
+    sys.exit(1)
+elif not os.path.exists(GCP_SERVICE_ACCOUNT_KEY_PATH):
+    logging.error(f"GCP Service Account Key not found at {GCP_SERVICE_ACCOUNT_KEY_PATH}. Exiting.")
+    sys.exit(1)
+else:
+    try:
+        credentials = service_account.Credentials.from_service_account_file(GCP_SERVICE_ACCOUNT_KEY_PATH)
+        subscriber = pubsub_v1.SubscriberClient(credentials=credentials)
+        subscription_path = subscriber.subscription_path(GCP_PROJECT_ID, HPC_PUBSUB_SUBSCRIPTION_ID)
+        logging.info(f"Pub/Sub Subscriber Client initialized for subscription: {subscription_path}")
+    except Exception as e:
+        logging.error(f"Failed to initialize Pub/Sub Subscriber Client: {e}. Exiting.")
+        sys.exit(1)
+
+# --- Simulate HPC Task Execution ---
+# In a real HPC worker, this would dynamically load and run Mojo kernels, CUDA code, etc.
+# For now, it logs the task and pretends to do work.
+def execute_hpc_task(task_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Simulates the execution of a high-performance compute task.
+    In a real system, this would involve calling the compiled Mojo core, CUDA kernels, etc.
+    """
+    logging.info(f" Executing task: {task_name}")
+    start_time = time.time()
+    result = {"status": "SUCCESS", "task_name": task_name, "executed_at": datetime.now(timezone.utc).isoformat()}
+
+    if task_name == "run_svcf_step":
+        viscosity = payload.get("viscosity", 1.0)
+        logging.info(f"  Simulating SVCF step with viscosity: {viscosity}")
+        # Placeholder for actual Mojo/CUDA call
+        # Example: import engine18_core; core = engine18_core.HighPerformanceCore(); result_val = core.run_svcf_simulation_step(viscosity)
+        time.sleep(random.uniform(1.0, 5.0)) # Simulate work
+        result["simulated_result_value"] = random.uniform(100.0, 500.0) * viscosity
+        result["actual_computation"] = "Placeholder for Mojo/CUDA execution"
+    elif task_name == "video_render":
+        logging.info(f"  Simulating video rendering for {payload.get('video_id')}")
+        time.sleep(random.uniform(5.0, 15.0)) # Longer work
+        result["render_status"] = "completed"
+        result["render_output_path"] = f"/mnt/outputs/{payload.get('video_id')}.mp4"
+    else:
+        logging.warning(f"  Unknown task type: {task_name}. Performing generic simulation.")
+        time.sleep(random.uniform(0.5, 2.0))
+        result["message"] = "Generic task simulation."
+    
+    end_time = time.time()
+    result["execution_duration_seconds"] = round(end_time - start_time, 2)
+    logging.info(f" Task '{task_name}' completed in {result['execution_duration_seconds']}s.")
+    return result
+
+def callback(message: pubsub_v1.subscriber.message.Message):
+    """Callback function for processing Pub/Sub messages."""
+    logging.info(f"Received message: {message.message_id}")
+    try:
+        data = json.loads(message.data.decode("utf-8"))
+        chloe_id = data.get("chloe_id", "unknown_chloe")
+        task_name = data.get("task_name")
+        payload = data.get("payload", {})
+
+        if not task_name:
+            logging.warning(f"Message {message.message_id} from {chloe_id} has no 'task_name'. Acknowledging.")
+            message.ack()
+            return
+
+        logging.info(f" Processing task '{task_name}' from Chloe: {chloe_id}")
+        
+        # Execute the simulated HPC task
+        task_result = execute_hpc_task(task_name, payload)
+
+        # In a real system, you would publish this result back to a results topic
+        # or a database where Chloe can retrieve it.
+        logging.info(f" Task '{task_name}' result: {task_result['status']}")
+        
+        message.ack() # Acknowledge the message to remove it from the subscription
+        logging.info(f"Acknowledged message: {message.message_id}")
+
+    except json.JSONDecodeError:
+        logging.error(f"Could not decode JSON from message {message.message_id}. Data: {message.data}. Nacking.")
+        message.nack() # Negatively acknowledge, message will be redelivered
+    except Exception as e:
+        logging.error(f"Error processing message {message.message_id}: {e}. Nacking.")
+        message.nack()
+
+def main_loop():
+    logging.info("HPC Offload Worker starting...")
+    logging.info(f"Listening on subscription: {subscription_path}")
+
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
+
+    print(f"HPC Offload Worker listening for messages on {subscription_path}. To exit, press Ctrl+C.")
+
+    try:
+        streaming_pull_future.result() # Blocks indefinitely
+    except TimeoutError:
+        streaming_pull_future.cancel()
+        streaming_pull_future.result()
+    except KeyboardInterrupt:
+        logging.info("KeyboardInterrupt received. Stopping subscriber.")
+        streaming_pull_future.cancel()
+        streaming_pull_future.result()
+    finally:
+        subscriber.api.transport.close() # Close transport layer
+        logging.info("HPC Offload Worker stopped.")
+
+if __name__ == "__main__":
+    main_loop()
+
