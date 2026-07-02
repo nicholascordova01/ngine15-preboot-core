@@ -117,5 +117,18 @@ def main_cli_loop(chloe_instance):
     print("\n[Engine15] Process finished.")
 
 if __name__ == "__main__":
-    chloe = ChloeAI()
-    main_cli_loop(chloe)
+    try:
+        chloe = ChloeAI()
+        main_cli_loop(chloe)
+    except Exception as _startup_exc:
+        import traceback
+        _ts = datetime.now(timezone.utc).isoformat()
+        _crash_msg = f"[STARTUP CRASH] {_ts} — {_startup_exc}\n{traceback.format_exc()}"
+        print(_crash_msg, file=sys.stderr)
+        try:
+            WORKDIR.mkdir(parents=True, exist_ok=True)
+            with open(WORKDIR / "startup_crash.log", "a") as _f:
+                _f.write(_crash_msg + "\n")
+        except Exception:
+            pass
+        sys.exit(1)

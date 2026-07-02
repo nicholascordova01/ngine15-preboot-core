@@ -362,4 +362,17 @@ def main():
     chloe.run()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as _startup_exc:
+        import traceback as _tb
+        _ts = datetime.now(timezone.utc).isoformat()
+        _crash_msg = f"[STARTUP CRASH] {_ts} — {_startup_exc}\n{_tb.format_exc()}"
+        print(_crash_msg, file=sys.stderr)
+        try:
+            WORKDIR.mkdir(parents=True, exist_ok=True)
+            with open(WORKDIR / "startup_crash.log", "a") as _f:
+                _f.write(_crash_msg + "\n")
+        except Exception:
+            pass
+        sys.exit(1)
